@@ -320,7 +320,7 @@
 (defn- res [form]
   (cond
    (keyword? form) form
-   (symbol? form) (c/or (-> form resolve ->sym) form)   
+   (symbol? form) (c/or (let [r (resolve form)] (if (var? r) (symbol r) (when r form))) form) ;; jolt: a resolved deftype is not an emittable literal
    (sequential? form) (walk/postwalk #(if (symbol? %) (res %) %) (unfn form))
    :else form))
 
