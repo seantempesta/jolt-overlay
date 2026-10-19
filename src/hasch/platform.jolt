@@ -28,10 +28,10 @@
   (apply str (map byte->hex bytes)))
 
 (defn ^MessageDigest sha512-message-digest []
-  (MessageDigest/getInstance "sha-512"))
+  (MessageDigest/getInstance "SHA-512"))  ;; jolt: algorithm names are case-sensitive)
 
 (defn ^MessageDigest md5-message-digest []
-  (MessageDigest/getInstance "md5"))
+  (MessageDigest/getInstance "MD5"))
 
 ;; Raw byte-level digests — the portable, synchronous SHA primitive that keyed
 ;; crypto (HMAC/HKDF in geheimnis) builds on. NOT structural: these hash a
