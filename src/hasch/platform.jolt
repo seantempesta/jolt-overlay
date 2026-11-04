@@ -114,6 +114,11 @@ Our hash version is coded in first 2 bits."
   (-coerce [this md-create-fn write-handlers]
     (encode (:number magics) (.getBytes (.toString this) "UTF-8")))
 
+  ;; a ratio is a plain number the stock list omits; a value holding one stored out of line reached hasch at commit
+  clojure.lang.Ratio
+  (-coerce [this md-create-fn write-handlers]
+    (encode (:number magics) (.getBytes (.toString this) "UTF-8")))
+
   java.util.UUID
   (-coerce [this md-create-fn write-handlers]
     (encode (:uuid magics) (.getBytes (.toString this) "UTF-8")))
