@@ -5,7 +5,7 @@
             [clojure.java.io :as io]
             [incognito.base :as ib]
             [hasch.benc :refer [magics PHashCoercion -coerce
-                                digest coerce-seq xor-hashes encode-safe]])
+                                digest xor-hashes encode-safe]])
   (:import java.io.ByteArrayOutputStream
            java.nio.ByteBuffer
            java.security.MessageDigest))
@@ -51,7 +51,9 @@
   "Generates a UUID version 5 from a sha-1 hash byte sequence.
 Our hash version is coded in first 2 bits."
   [sha-hash]
-  (let [bb (ByteBuffer/wrap (byte-array sha-hash))
+  ;; jolt: only the first 16 bytes are read, so only they are made into the array (a lazy
+  ;; seq of 64 from edn-hash, each element coerced, was most of a uuid's fixed cost)
+  (let [bb (ByteBuffer/wrap (byte-array (take 16 sha-hash)))
         high (.getLong bb)
         low (.getLong bb)]
     (java.util.UUID. (-> high
@@ -64,10 +66,24 @@ Our hash version is coded in first 2 bits."
                          (bit-clear 62)))))
 
 (defn ^bytes encode [^Byte magic ^bytes a]
-  (let [out (ByteArrayOutputStream.)]
-    (.write out (byte-array 1 magic))
-    (.write out a)
-    (.toByteArray out)))
+  ;; jolt: one array and one copy, the same bytes as writing both to a ByteArrayOutputStream
+  ;; (each of its method calls is a host dispatch)
+  (let [n (alength a)
+        out (byte-array (inc n))]
+    (aset out 0 (byte magic))
+    (System/arraycopy a 0 out 1 n)
+    out))
+
+(defn- ^bytes coerce-seq
+  "hasch.benc/coerce-seq's digest, byte for byte: the digest of the elements' encodings in order
+  (an empty seq encodes one nil, as there). Jolt: the encodings are joined and given to the
+  digest in one call; a MessageDigest method call is a host dispatch that cost more than
+  hashing an element's 37 bytes, and the stock loop made one per element."
+  [s md-create-fn write-handlers]
+  (let [bas (mapv #(-coerce % md-create-fn write-handlers) (or (seq s) [nil]))
+        out (byte-array (reduce (fn [n ^bytes b] (+ n (alength b))) 0 bas))]
+    (reduce (fn [off ^bytes b] (System/arraycopy b 0 out off (alength b)) (+ off (alength b))) 0 bas)
+    (.digest ^MessageDigest (md-create-fn) out)))
 
 (defn- ^bytes str->utf8 [x]
   (-> x str (.getBytes "UTF-8")))
@@ -119,9 +135,10 @@ Our hash version is coded in first 2 bits."
   (-coerce [this md-create-fn write-handlers]
     (encode (:number magics) (.getBytes (.toString this) "UTF-8")))
 
+  ;; jolt: str, the same text as .toString without a method dispatch
   java.util.UUID
   (-coerce [this md-create-fn write-handlers]
-    (encode (:uuid magics) (.getBytes (.toString this) "UTF-8")))
+    (encode (:uuid magics) (.getBytes (str this) "UTF-8")))
 
   java.util.Date
   (-coerce [this md-create-fn write-handlers]
