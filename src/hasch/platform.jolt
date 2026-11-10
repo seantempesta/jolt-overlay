@@ -51,9 +51,11 @@
   "Generates a UUID version 5 from a sha-1 hash byte sequence.
 Our hash version is coded in first 2 bits."
   [sha-hash]
-  ;; jolt: only the first 16 bytes are read, so only they are made into the array (a lazy
-  ;; seq of 64 from edn-hash, each element coerced, was most of a uuid's fixed cost)
-  (let [bb (ByteBuffer/wrap (byte-array (take 16 sha-hash)))
+  ;; jolt: only the first 16 bytes are read. A digest's byte array (konserve's key->store-key
+  ;; passes one) is read where it is, with no copy: a seq over it boxed every byte, 5.5 KB
+  ;; more a key than the stock copy. A seq (edn-hash's lazy 64) has only its first 16 made
+  ;; into an array (each element coerced, it was most of a uuid's fixed cost).
+  (let [bb (ByteBuffer/wrap (if (bytes? sha-hash) sha-hash (byte-array (take 16 sha-hash))))
         high (.getLong bb)
         low (.getLong bb)]
     (java.util.UUID. (-> high
